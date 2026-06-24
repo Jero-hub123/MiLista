@@ -451,6 +451,172 @@ def guardar_en_historial(perfil, lista_final, costo_estimado):
         st.session_state.historial = st.session_state.historial[:5]
 
 
+
+# ── Generador de menú semanal ───────────────────────────────────────────────
+RECETAS_DESAYUNO = [
+    {"nombre": "Avena con banana", "ingredientes": ["Avena", "Banana"], "emoji": "🥣"},
+    {"nombre": "Yogur con fruta", "ingredientes": ["Yogur", "Manzana"], "emoji": "🍎"},
+    {"nombre": "Tostadas con huevo", "ingredientes": ["Pan lactal", "Huevos"], "emoji": "🍞"},
+    {"nombre": "Leche con avena", "ingredientes": ["Leche entera", "Avena"], "emoji": "🥛"},
+    {"nombre": "Fruta de estación", "ingredientes": ["Banana", "Naranja"], "emoji": "🍊"},
+    {"nombre": "Huevos revueltos", "ingredientes": ["Huevos", "Pan lactal"], "emoji": "🍳"},
+    {"nombre": "Yogur sin lactosa con fruta", "ingredientes": ["Yogur sin lactosa", "Banana"], "emoji": "🥣"},
+]
+
+RECETAS_ALMUERZO = [
+    {"nombre": "Arroz con pollo", "ingredientes": ["Pechuga de pollo", "Arroz"], "emoji": "🍚"},
+    {"nombre": "Lentejas guisadas", "ingredientes": ["Lentejas", "Cebolla", "Zanahoria"], "emoji": "🍲"},
+    {"nombre": "Ensalada con atún", "ingredientes": ["Atún en lata", "Lechuga", "Tomate"], "emoji": "🥗"},
+    {"nombre": "Fideos con salsa", "ingredientes": ["Fideos (trigo)", "Tomate", "Cebolla"], "emoji": "🍝"},
+    {"nombre": "Cazuela de garbanzos", "ingredientes": ["Garbanzos", "Zanahoria", "Cebolla"], "emoji": "🍛"},
+    {"nombre": "Sopa de verduras", "ingredientes": ["Zanahoria", "Papa", "Cebolla", "Espinaca"], "emoji": "🍜"},
+    {"nombre": "Pollo con brócoli y arroz", "ingredientes": ["Pechuga de pollo", "Brócoli", "Arroz"], "emoji": "🥦"},
+]
+
+RECETAS_CENA = [
+    {"nombre": "Tortilla de papas", "ingredientes": ["Papa", "Huevos", "Cebolla"], "emoji": "🥚"},
+    {"nombre": "Merluza al horno", "ingredientes": ["Merluza", "Papa"], "emoji": "🐟"},
+    {"nombre": "Ensalada de lentejas", "ingredientes": ["Lentejas", "Tomate", "Cebolla"], "emoji": "🥗"},
+    {"nombre": "Milanesas de pollo", "ingredientes": ["Pechuga de pollo", "Lechuga", "Tomate"], "emoji": "🍗"},
+    {"nombre": "Hamburguesas caseras", "ingredientes": ["Carne picada", "Cebolla"], "emoji": "🍔"},
+    {"nombre": "Arroz con huevo frito", "ingredientes": ["Arroz", "Huevos"], "emoji": "🍳"},
+    {"nombre": "Wok de verduras", "ingredientes": ["Brócoli", "Zanahoria", "Arroz"], "emoji": "🥢"},
+]
+
+DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+
+def mejor_receta(recetas, productos_disponibles, usadas):
+    recetas_posibles = []
+    for receta in recetas:
+        if receta["nombre"] in usadas:
+            continue
+        coincidencias = sum(1 for ing in receta["ingredientes"] if ing in productos_disponibles)
+        recetas_posibles.append((coincidencias, receta))
+    recetas_posibles.sort(key=lambda x: -x[0])
+    for _, receta in recetas_posibles:
+        return receta
+    for receta in recetas:
+        if receta["nombre"] not in usadas:
+            return receta
+    return recetas[0]
+
+
+def generar_menu(lista_final):
+    productos_disponibles = set()
+    for items in lista_final.values():
+        for item in items:
+            productos_disponibles.add(item["nombre"])
+
+    menu = []
+    usadas_d, usadas_a, usadas_c = set(), set(), set()
+    for _ in DIAS:
+        d = mejor_receta(RECETAS_DESAYUNO, productos_disponibles, usadas_d)
+        a = mejor_receta(RECETAS_ALMUERZO, productos_disponibles, usadas_a)
+        c = mejor_receta(RECETAS_CENA, productos_disponibles, usadas_c)
+        usadas_d.add(d["nombre"])
+        usadas_a.add(a["nombre"])
+        usadas_c.add(c["nombre"])
+        menu.append({"desayuno": d, "almuerzo": a, "cena": c})
+    return menu
+
+
+def generar_html_menu(menu, perfil):
+    dias_html = ""
+    total_comidas = len(DIAS) * 3
+    for i, (dia, comidas) in enumerate(zip(DIAS, menu)):
+        def comida_html(tipo, receta, idx):
+            ings = " · ".join(receta["ingredientes"][:2])
+            cb_id = "cb_" + str(idx) + "_" + tipo
+            return (
+                '<div class="comida">'
+                '<div class="comida-tipo">' + tipo.upper() + '</div>'
+                '<div class="comida-row">'
+                '<span class="comida-emoji">' + receta["emoji"] + '</span>'
+                '<div class="comida-info">'
+                '<div class="comida-nombre">' + receta["nombre"] + '</div>'
+                '<div class="comida-ings">' + ings + '</div>'
+                '</div>'
+                '<input type="checkbox" id="' + cb_id + '" onchange="toggleComida(this)">'
+                '</div>'
+                '</div>'
+            )
+
+        dias_html += (
+            '<div class="dia-card">'
+            '<div class="dia-nombre">' + dia + '</div>'
+            + comida_html("desayuno", comidas["desayuno"], i)
+            + comida_html("almuerzo", comidas["almuerzo"], i)
+            + comida_html("cena", comidas["cena"], i)
+            + '</div>'
+        )
+
+    css = """
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #e8f5f0; min-height: 100vh; padding: 24px 16px; }
+      .card { background: white; border-radius: 16px; max-width: 680px; margin: 0 auto; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+      .header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+      .logo { background: #1D9E75; border-radius: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+      h1 { font-size: 22px; font-weight: 700; color: #0f172a; }
+      .subtitle { font-size: 13px; color: #64748b; margin-bottom: 8px; }
+      .meta { font-size: 12px; color: #94a3b8; margin-bottom: 20px; }
+      .progress-label { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+      .progress-bar { background: #e2e8f0; border-radius: 999px; height: 6px; margin-bottom: 20px; }
+      .progress-fill { background: #1D9E75; border-radius: 999px; height: 6px; width: 0%; transition: width 0.3s; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .dia-card { background: #f8fafc; border-radius: 12px; padding: 14px; border: 1px solid #e2e8f0; }
+      .dia-nombre { font-size: 11px; font-weight: 700; color: white; background: #1D9E75; border-radius: 6px; padding: 4px 8px; display: inline-block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+      .comida { margin-bottom: 10px; }
+      .comida:last-child { margin-bottom: 0; }
+      .comida-tipo { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+      .comida-row { display: flex; align-items: center; gap: 8px; }
+      .comida-emoji { font-size: 20px; flex-shrink: 0; }
+      .comida-info { flex: 1; }
+      .comida-nombre { font-size: 12px; font-weight: 600; color: #0f172a; line-height: 1.3; }
+      .comida-ings { font-size: 11px; color: #94a3b8; }
+      input[type=checkbox] { accent-color: #1D9E75; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+      .tachado .comida-nombre { text-decoration: line-through; color: #94a3b8; }
+      .tachado .comida-ings { text-decoration: line-through; color: #cbd5e1; }
+      .footer { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 20px; }
+    """
+
+    js_total = str(total_comidas)
+    js = """
+      function toggleComida(cb) {
+        var row = cb.closest('.comida-row');
+        if (cb.checked) row.classList.add('tachado');
+        else row.classList.remove('tachado');
+        var done = document.querySelectorAll('input:checked').length;
+        document.getElementById('prog-label').textContent = done + ' de """ + js_total + """ comidas listas';
+        document.getElementById('prog-fill').style.width = (done / """ + js_total + """ * 100) + '%';
+      }
+    """
+
+    fecha = datetime.now().strftime("%d/%m/%Y")
+    n_personas = perfil["n_personas"]
+    objetivo = perfil["objetivo"]
+
+    html = (
+        "<!DOCTYPE html><html lang='es'><head>"
+        "<meta charset='UTF-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+        "<title>MILista - Menu semanal</title>"
+        "<style>" + css + "</style></head><body>"
+        "<div class='card'>"
+        "<div class='header'><div class='logo'>🗓️</div><h1>Menú semanal</h1></div>"
+        "<p class='subtitle'>Desayuno, almuerzo y cena — basado en tu lista</p>"
+        "<div class='meta'>" + fecha + " &nbsp;·&nbsp; " + n_personas + " personas &nbsp;·&nbsp; " + objetivo + "</div>"
+        "<div class='progress-label' id='prog-label'>0 de " + js_total + " comidas listas</div>"
+        "<div class='progress-bar'><div class='progress-fill' id='prog-fill'></div></div>"
+        "<div class='grid'>" + dias_html + "</div>"
+        "<div class='footer'>Recetas sugeridas segun los productos de tu lista · MILista</div>"
+        "</div>"
+        "<script>" + js + "</script>"
+        "</body></html>"
+    )
+    return html
+
+
 # ── UI ───────────────────────────────────────────────────────────────────────
 
 st.markdown('<div class="milista-header"><p class="milista-title">🛒 MILista</p></div>', unsafe_allow_html=True)
@@ -518,6 +684,108 @@ if generar:
     st.markdown(f'<div class="rec-box"><div class="rec-title">💡 Recomendaciones para tu hogar</div>{recs_html}</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # Generar HTML interactivo para descarga
+    filas_html = ""
+    for categoria, items in lista_final.items():
+        filas_html += f'<div class="cat-title">{categoria}</div>'
+        for item in items:
+            item_id = item["nombre"].replace(" ", "_")
+            filas_html += f'''
+            <label class="item-label" id="label_{item_id}">
+                <input type="checkbox" onclick="toggleItem(\'{item_id}\')">
+                <span class="item-text">
+                    <span class="item-name">{item["nombre"]}</span>
+                    <span class="item-meta">{item["cantidad"]} {item["unidad"]} &nbsp;·&nbsp; <b>$U {item["costo"]:,.0f}</b></span>
+                </span>
+            </label>'''
+
+    diferencia_html = presupuesto - costo_estimado
+    if diferencia_html >= 0:
+        resumen_html = f'<div class="resumen-ok">✅ Te sobra $U {diferencia_html:,.0f}</div>'
+    else:
+        resumen_html = f'<div class="resumen-mal">⚠️ Te falta $U {abs(diferencia_html):,.0f}</div>'
+
+    html_content = f'''<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MILista — {datetime.now().strftime("%d/%m/%Y")}</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #e8f5f0; min-height: 100vh; padding: 24px 16px; }}
+  .card {{ background: white; border-radius: 16px; max-width: 480px; margin: 0 auto; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }}
+  .header {{ display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }}
+  .logo {{ background: #1D9E75; border-radius: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 20px; }}
+  h1 {{ font-size: 22px; font-weight: 700; color: #0f172a; }}
+  .meta {{ font-size: 12px; color: #94a3b8; margin-bottom: 20px; }}
+  .resumen {{ display: flex; justify-content: space-between; background: #f8fafc; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #0f172a; }}
+  .resumen b {{ font-size: 15px; }}
+  .resumen-ok {{ background: #1D9E75; color: white; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }}
+  .resumen-mal {{ background: #fef2f2; color: #b91c1c; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px; border: 1px solid #fca5a5; }}
+  .cat-title {{ font-size: 12px; font-weight: 700; color: white; background: #1D9E75; padding: 6px 12px; border-radius: 8px; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }}
+  .item-label {{ display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid #f1f5f9; cursor: pointer; }}
+  .item-label:last-child {{ border-bottom: none; }}
+  input[type="checkbox"] {{ width: 18px; height: 18px; accent-color: #1D9E75; cursor: pointer; flex-shrink: 0; }}
+  .item-text {{ display: flex; justify-content: space-between; align-items: center; width: 100%; }}
+  .item-name {{ font-size: 14px; color: #1e293b; }}
+  .item-meta {{ font-size: 12px; color: #94a3b8; text-align: right; }}
+  .tachado .item-name {{ text-decoration: line-through; color: #94a3b8; }}
+  .tachado .item-meta {{ text-decoration: line-through; color: #cbd5e1; }}
+  .progress-bar {{ background: #e2e8f0; border-radius: 999px; height: 6px; margin-bottom: 20px; }}
+  .progress-fill {{ background: #1D9E75; border-radius: 999px; height: 6px; width: 0%; transition: width 0.3s; }}
+  .progress-label {{ font-size: 12px; color: #64748b; margin-bottom: 6px; }}
+  .footer {{ font-size: 11px; color: #94a3b8; text-align: center; margin-top: 20px; }}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo">🛒</div>
+    <h1>MILista</h1>
+  </div>
+  <div class="meta">{datetime.now().strftime("%d/%m/%Y")} &nbsp;·&nbsp; {perfil["n_personas"]} personas &nbsp;·&nbsp; {objetivo} &nbsp;·&nbsp; $U {presupuesto:,.0f}</div>
+  <div class="resumen">
+    <div>Presupuesto<br><b>$U {presupuesto:,.0f}</b></div>
+    <div>Costo estimado<br><b>$U {costo_estimado:,.0f}</b></div>
+  </div>
+  {resumen_html}
+  <div class="progress-label" id="progress-label">0 productos comprados</div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  {filas_html}
+  <div class="footer">Precios estimados basados en datos del SIPC Uruguay</div>
+</div>
+<script>
+  var total = document.querySelectorAll("input[type=checkbox]").length;
+  function toggleItem(id) {{
+    var label = document.getElementById("label_" + id);
+    var cb = label.querySelector("input");
+    if (cb.checked) {{ label.classList.add("tachado"); }} else {{ label.classList.remove("tachado"); }}
+    var checked = document.querySelectorAll("input:checked").length;
+    document.getElementById("progress-label").textContent = checked + " de " + total + " productos comprados";
+    document.getElementById("progress-fill").style.width = (checked / total * 100) + "%";
+  }}
+</script>
+</body>
+</html>'''
+
+    st.download_button(
+        label="⬇️ Descargar lista interactiva",
+        data=html_content,
+        file_name=f"milista_{datetime.now().strftime('%d%m%Y')}.html",
+        mime="text/html",
+    )
+
+    menu = generar_menu(lista_final)
+    html_menu = generar_html_menu(menu, perfil)
+    st.download_button(
+        label="🍽️ Descargar menú semanal",
+        data=html_menu,
+        file_name=f"menu_{datetime.now().strftime('%d%m%Y')}.html",
+        mime="text/html",
+    )
+
     st.caption("_Precios estimados basados en datos del SIPC Uruguay. Pueden variar según el supermercado._")
 
 if st.session_state.historial:
